@@ -27,14 +27,14 @@ test( "widget creation", function() {
 });
 
 test( "jQuery usage", function() {
-	expect( 10 );
+	expect( 11 );
 
-	var shouldInit = false;
+	var shouldCreate = false;
 
 	$.widget( "ui.testWidget", {
 		getterSetterVal: 5,
 		_create: function() {
-			ok( shouldInit, "init called on instantiation" );
+			ok( shouldCreate, "create called on instantiation" );
 		},
 		methodWithParams: function( param1, param2 ) {
 			ok( true, "method called via .pluginName(methodName)" );
@@ -54,9 +54,13 @@ test( "jQuery usage", function() {
 		}
 	});
 
-	shouldInit = true;
-	var elem = $( "<div></div>" ).testWidget();
-	shouldInit = false;
+	shouldCreate = true;
+	var elem = $( "<div></div>" )
+		.bind( "testwidgetcreate", function() {
+			ok( shouldCreate, "create event triggered on instantiation" );
+		})
+		.testWidget();
+	shouldCreate = false;
 
 	var instance = elem.data( "testWidget" );
 	equals( typeof instance, "object", "instance stored in .data(pluginName)" );
@@ -74,12 +78,12 @@ test( "jQuery usage", function() {
 test( "direct usage", function() {
 	expect( 9 );
 
-	var shouldInit = false;
+	var shouldCreate = false;
 
 	$.widget( "ui.testWidget", {
 		getterSetterVal: 5,
 		_create: function() {
-			ok( shouldInit, "init called on instantiation" );
+			ok( shouldCreate, "create called on instantiation" );
 		},
 		methodWithParams: function( param1, param2 ) {
 			ok( true, "method called dirctly" );
@@ -99,9 +103,9 @@ test( "direct usage", function() {
 	
 	var elem = $( "<div></div>" )[ 0 ];
 	
-	shouldInit = true;
+	shouldCreate = true;
 	var instance = new $.ui.testWidget( {}, elem );
-	shouldInit = false;
+	shouldCreate = false;
 
 	equals( $( elem ).data( "testWidget" ), instance,
 		"instance stored in .data(pluginName)" );
@@ -114,6 +118,23 @@ test( "direct usage", function() {
 	equals( ret, 5, "getter/setter can act as getter" );
 	instance.getterSetterMethod( 30 );
 	equals( instance.getterSetterVal, 30, "getter/setter can act as setter" );
+});
+
+test( "error handling", function() {
+	expect( 2 );
+	var error = $.error;
+	$.widget( "ui.testWidget", {} );
+	$.error = function( msg ) {
+		equal( msg, "cannot call methods on testWidget prior to initialization; " +
+			"attempted to call method 'missing'", "method call before init" );
+	};
+	$( "<div>" ).testWidget( "missing" );
+	$.error = function( msg ) {
+		equal( msg, "no such method 'missing' for testWidget widget instance",
+			"invalid method call on widget instance" );
+	};
+	$( "<div>" ).testWidget().testWidget( "missing" );
+	$.error = error;
 });
 
 test("merge multiple option arguments", function() {
@@ -152,6 +173,32 @@ test("merge multiple option arguments", function() {
 	});
 });
 
+test( "_getCreateOptions()", function() {
+	expect( 1 );
+	$.widget( "ui.testWidget", {
+		options: {
+			option1: "valuex",
+			option2: "valuex",
+			option3: "value3",
+		},
+		_getCreateOptions: function() {
+			return {
+				option1: "override1",
+				option2: "overideX",
+			};
+		},
+		_create: function() {
+			same( this.options, {
+				disabled: false,
+				option1: "override1",
+				option2: "value2",
+				option3: "value3"
+			});
+		}
+	});
+	$( "<div>" ).testWidget({ option2: "value2" });
+});
+
 test( "re-init", function() {
 	var div = $( "<div></div>" ),
 		actions = [];
@@ -179,6 +226,59 @@ test( "re-init", function() {
 	actions = [];
 	div.testWidget({ foo: "bar" });
 	same( actions, [ "optionfoo", "init" ], "correct methods called on re-init with options" );
+});
+
+test( "._super()", function() {
+	expect( 6 );
+	var instance;
+	$.widget( "ui.testWidget", {
+		method: function( a, b ) {
+			same( this, instance, "this is correct in super widget" );
+			same( a, 5, "parameter passed to super widget" );
+			same( b, 10, "second parameter passed to super widget" );
+			return a + b;
+		}
+	});
+
+	$.widget( "ui.testWidget2", $.ui.testWidget, {
+		method: function( a ) {
+			same( this, instance, "this is correct in widget" );
+			same( a, 5, "parameter passed to widget" );
+			var ret = this._super( "method", a, a*2 );
+			same( ret, 15, "super returned value" );
+		}
+	});
+
+	instance = $( "<div>" ).testWidget2().data( "testWidget2" );
+	instance.method( 5 );
+	delete $.ui.testWidget2;
+});
+
+test( "._superApply()", function() {
+	expect( 7 );
+	var instance;
+	$.widget( "ui.testWidget", {
+		method: function( a, b ) {
+			same( this, instance, "this is correct in super widget" );
+			same( a, 5, "parameter passed to super widget" );
+			same( b, 10, "second parameter passed to super widget" );
+			return a + b;
+		}
+	});
+
+	$.widget( "ui.testWidget2", $.ui.testWidget, {
+		method: function( a, b ) {
+			same( this, instance, "this is correct in widget" );
+			same( a, 5, "parameter passed to widget" );
+			same( b, 10, "second parameter passed to widget" );
+			var ret = this._superApply( "method", arguments );
+			same( ret, 15, "super returned value" );
+		}
+	});
+
+	instance = $( "<div>" ).testWidget2().data( "testWidget2" );
+	instance.method( 5, 10 );
+	delete $.ui.testWidget2;
 });
 
 test( ".option() - getter", function() {
@@ -209,7 +309,30 @@ test( ".option() - getter", function() {
 		"modifying returned options hash does not modify plugin instance" );
 });
 
-test( ".option() - setter", function() {
+test( ".option() - delegate to ._setOptions()", function() {
+	var calls = [];
+	$.widget( "ui.testWidget", {
+		_create: function() {},
+		_setOptions: function( options ) {
+			calls.push( options );
+		}
+	});
+	var div = $( "<div></div>" ).testWidget();
+
+	calls = [];
+	div.testWidget( "option", "foo", "bar" );
+	same( calls, [{ foo: "bar" }], "_setOptions called for single option" );
+	
+	calls = [];
+	div.testWidget( "option", {
+		bar: "qux",
+		quux: "quuux"
+	});
+	same( calls, [{ bar: "qux", quux: "quuux" }],
+		"_setOptions called with multiple options" );
+});
+
+test( ".option() - delegate to ._setOption()", function() {
 	var calls = [];
 	$.widget( "ui.testWidget", {
 		_create: function() {},
@@ -407,6 +530,73 @@ test( "._trigger() - provide event and ui", function() {
 		}
 	})
 	.testWidget( "testEvent" );
+});
+
+test( "auto-destroy - .remove()", function() {
+	expect( 1 );
+	$.widget( "ui.testWidget", {
+		_create: function() {},
+		destroy: function() {
+			ok( true, "destroyed from .remove()" );
+		}
+	});
+	$( "#widget" ).testWidget().remove();
+});
+
+test( "auto-destroy - .remove() on parent", function() {
+	expect( 1 );
+	$.widget( "ui.testWidget", {
+		_create: function() {},
+		destroy: function() {
+			ok( true, "destroyed from .remove() on parent" );
+		}
+	});
+	$( "#widget" ).testWidget().parent().remove();
+});
+
+test( "auto-destroy - .remove() on child", function() {
+	$.widget( "ui.testWidget", {
+		_create: function() {},
+		destroy: function() {
+			ok( false, "destroyed from .remove() on child" );
+		}
+	});
+	$( "#widget" ).testWidget().children().remove();
+	// http://github.com/jquery/qunit/pull/34
+	$.ui.testWidget.prototype.destroy = $.noop;
+});
+
+test( "auto-destroy - .empty()", function() {
+	$.widget( "ui.testWidget", {
+		_create: function() {},
+		destroy: function() {
+			ok( false, "destroyed from .empty()" );
+		}
+	});
+	$( "#widget" ).testWidget().empty();
+	// http://github.com/jquery/qunit/pull/34
+	$.ui.testWidget.prototype.destroy = $.noop;
+});
+
+test( "auto-destroy - .empty() on parent", function() {
+	expect( 1 );
+	$.widget( "ui.testWidget", {
+		_create: function() {},
+		destroy: function() {
+			ok( true, "destroyed from .empty() on parent" );
+		}
+	});
+	$( "#widget" ).testWidget().parent().empty();
+});
+
+test( "auto-destroy - .detach()", function() {
+	$.widget( "ui.testWidget", {
+		_create: function() {},
+		destroy: function() {
+			ok( false, "destroyed from .detach()" );
+		}
+	});
+	$( "#widget" ).testWidget().detach();
 });
 
 })( jQuery );

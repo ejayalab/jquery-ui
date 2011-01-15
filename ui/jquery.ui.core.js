@@ -56,7 +56,7 @@ $.extend( $.ui, {
 	}
 });
 
-//jQuery plugins
+// plugins
 $.fn.extend({
 	_focus: $.fn.focus,
 	focus: function( delay, fn ) {
@@ -105,8 +105,8 @@ $.fn.extend({
 					// other browsers return a string
 					// we ignore the case of nested elements with an explicit value of 0
 					// <div style="z-index: -10;"><div style="z-index: 0;"></div></div>
-					value = parseInt( elem.css( "zIndex" ) );
-					if ( !isNaN( value ) && value != 0 ) {
+					value = parseInt( elem.css( "zIndex" ), 10 );
+					if ( !isNaN( value ) && value !== 0 ) {
 						return value;
 					}
 				}
@@ -115,59 +115,19 @@ $.fn.extend({
 		}
 
 		return 0;
+	},
+
+	disableSelection: function() {
+		return this.bind( ( $.support.selectstart ? "selectstart" : "mousedown" ) +
+			".ui-disableSelection", function( event ) {
+				event.preventDefault();
+			});
+	},
+
+	enableSelection: function() {
+		return this.unbind( ".ui-disableSelection" );
 	}
 });
-
-(function() {
-	var elem = document.createElement( "div" ),
-		style = elem.style,
-		userSelectProp = "userSelect" in style && "userSelect";
-
-	if ( !userSelectProp ) {
-		$.each( [ "Moz", "Webkit", "Khtml" ], function( i, prefix ) {
-			var vendorProp = prefix + "UserSelect";
-			if ( vendorProp in style ) {
-				userSelectProp = vendorProp;
-				return false;
-			}
-		});
-	}
-	var selectStart = !userSelectProp && "onselectstart" in elem && "selectstart.mouse";
-
-	elem = null;
-
-	$.fn.extend({
-		disableSelection: function() {
-			if ( userSelectProp ) {
-				this.css( userSelectProp, "none" );
-			} else {
-				this.find( "*" ).andSelf().attr( "unselectable", "on" );
-			}
-
-			if ( selectStart ) {
-				this.bind( selectStart, function() {
-					return false;
-				});
-			}
-
-			return this;
-		},
-
-		enableSelection: function() {
-			if ( userSelectProp ) {
-				this.css( userSelectProp, "" );
-			} else {
-				this.find( "*" ).andSelf().attr( "unselectable", "off" );
-			}
-
-			if ( selectStart ) {
-				this.unbind( selectStart );
-			}
-
-			return this;
-		}
-	});
-})();
 
 $.each( [ "Width", "Height" ], function( i, name ) {
 	var side = name === "Width" ? [ "Left", "Right" ] : [ "Top", "Bottom" ],
@@ -198,7 +158,7 @@ $.each( [ "Width", "Height" ], function( i, name ) {
 		}
 
 		return this.each(function() {
-			$.style( this, type, reduce( this, size ) + "px" );
+			$( this ).css( type, reduce( this, size ) + "px" );
 		});
 	};
 
@@ -208,12 +168,12 @@ $.each( [ "Width", "Height" ], function( i, name ) {
 		}
 
 		return this.each(function() {
-			$.style( this, type, reduce( this, size, true, margin ) + "px" );
+			$( this).css( type, reduce( this, size, true, margin ) + "px" );
 		});
 	};
 });
 
-//Additional selectors
+// selectors
 function visible( element ) {
 	return !$( element ).parents().andSelf().filter(function() {
 		return $.curCSS( this, "visibility" ) === "hidden" ||
@@ -254,10 +214,31 @@ $.extend( $.expr[ ":" ], {
 	}
 });
 
+// support
+$(function() {
+	var body = document.body,
+		div = body.appendChild( div = document.createElement( "div" ) );
+
+	$.extend( div.style, {
+		minHeight: "100px",
+		height: "auto",
+		padding: 0,
+		borderWidth: 0
+	});
+
+	$.support.minHeight = div.offsetHeight === 100;
+	$.support.selectstart = "onselectstart" in div;
+
+	// set display to none to avoid a layout bug in IE
+	// http://dev.jquery.com/ticket/4014
+	body.removeChild( div ).style.display = "none";
+});
 
 
 
 
+
+// deprecated
 $.extend( $.ui, {
 	// $.ui.plugin is deprecated.  Use the proxy pattern instead.
 	plugin: {
@@ -282,12 +263,7 @@ $.extend( $.ui, {
 		}
 	},
 	
-	// will be deprecated when we switch to jQuery 1.4 - use jQuery.contains()
-	contains: function( a, b ) {
-		return document.compareDocumentPosition ?
-			a.compareDocumentPosition( b ) & 16 :
-			a !== b && a.contains( b );
-	},
+	contains: $.contains,
 	
 	// only used by resizable
 	hasScroll: function( el, a ) {

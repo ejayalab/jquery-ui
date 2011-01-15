@@ -9,19 +9,14 @@
  */
 (function( $, undefined ) {
 
-var _remove = $.fn.remove;
+var slice = Array.prototype.slice;
 
-$.fn.remove = function( selector, keepData ) {
-	return this.each(function() {
-		if ( !keepData ) {
-			if ( !selector || $.filter( selector, [ this ] ).length ) {
-				$( "*", this ).add( [ this ] ).each(function() {
-					$( this ).triggerHandler( "remove" );
-				});
-			}
-		}
-		return _remove.call( $(this), selector, keepData );
-	});
+var _cleanData = $.cleanData;
+$.cleanData = function( elems ) {
+	for ( var i = 0, elem; (elem = elems[i]) != null; i++ ) {
+		$( elem ).triggerHandler( "remove" );
+	}
+	_cleanData( elems );
 };
 
 $.widget = function( name, base, prototype ) {
@@ -52,17 +47,13 @@ $.widget = function( name, base, prototype ) {
 	// we need to make the options hash a property directly on the new instance
 	// otherwise we'll modify the options hash on the prototype that we're
 	// inheriting from
-//	$.each( basePrototype, function( key, val ) {
-//		if ( $.isPlainObject(val) ) {
-//			basePrototype[ key ] = $.extend( {}, val );
-//		}
-//	});
 	basePrototype.options = $.extend( true, {}, basePrototype.options );
 	$[ namespace ][ name ].prototype = $.extend( true, basePrototype, {
 		namespace: namespace,
 		widgetName: name,
-		widgetEventPrefix: $[ namespace ][ name ].prototype.widgetEventPrefix || name,
-		widgetBaseClass: fullName
+		widgetEventPrefix: name,
+		widgetBaseClass: fullName,
+		base: base.prototype
 	}, prototype );
 
 	$.widget.bridge( name, $[ namespace ][ name ] );
@@ -71,7 +62,7 @@ $.widget = function( name, base, prototype ) {
 $.widget.bridge = function( name, object ) {
 	$.fn[ name ] = function( options ) {
 		var isMethodCall = typeof options === "string",
-			args = Array.prototype.slice.call( arguments, 1 ),
+			args = slice.call( arguments, 1 ),
 			returnValue = this;
 
 		// allow multiple hashes to be passed on init
@@ -80,7 +71,7 @@ $.widget.bridge = function( name, object ) {
 			options;
 
 		// prevent calls to internal methods
-		if ( isMethodCall && options.substring( 0, 1 ) === "_" ) {
+		if ( isMethodCall && options.charAt( 0 ) === "_" ) {
 			return returnValue;
 		}
 
@@ -88,11 +79,11 @@ $.widget.bridge = function( name, object ) {
 			this.each(function() {
 				var instance = $.data( this, name );
 				if ( !instance ) {
-					throw "cannot call methods on " + name + " prior to initialization; " +
-						"attempted to call method '" + options + "'";
+					return $.error( "cannot call methods on " + name + " prior to initialization; " +
+						"attempted to call method '" + options + "'" );
 				}
 				if ( !$.isFunction( instance[options] ) ) {
-					throw "no such method '" + options + "' for " + name + " widget instance";
+					return $.error( "no such method '" + options + "' for " + name + " widget instance" );
 				}
 				var methodValue = instance[ options ].apply( instance, args );
 				if ( methodValue !== instance && methodValue !== undefined ) {
@@ -135,7 +126,7 @@ $.Widget.prototype = {
 		this.element = $( element );
 		this.options = $.extend( true, {},
 			this.options,
-			$.metadata && $.metadata.get( element )[ this.widgetName ],
+			this._getCreateOptions(),
 			options );
 
 		var self = this;
@@ -144,12 +135,24 @@ $.Widget.prototype = {
 		});
 
 		this._create();
+		this._trigger( "create" );
 		this._init();
 	},
-	_create: function() {},
-	_init: function() {},
+	_getCreateOptions: function() {
+		return $.metadata && $.metadata.get( this.element[0] )[ this.widgetName ];
+	},
+	_create: $.noop,
+	_init: $.noop,
+
+	_super: function( method ) {
+		return this.base[ method ].apply( this, slice.call( arguments, 1 ) );
+	},
+	_superApply: function( method, args ) {
+		return this.base[ method ].apply( this, args );
+	},
 
 	destroy: function() {
+		this._destroy();
 		this.element
 			.unbind( "." + this.widgetName )
 			.removeData( this.widgetName );
@@ -160,18 +163,18 @@ $.Widget.prototype = {
 				this.widgetBaseClass + "-disabled " +
 				"ui-state-disabled" );
 	},
+	_destroy: $.noop,
 
 	widget: function() {
 		return this.element;
 	},
 
 	option: function( key, value ) {
-		var options = key,
-			self = this;
+		var options = key;
 
 		if ( arguments.length === 0 ) {
 			// don't return a reference to the internal hash
-			return $.extend( {}, self.options );
+			return $.extend( {}, this.options );
 		}
 
 		if  (typeof key === "string" ) {
@@ -182,20 +185,24 @@ $.Widget.prototype = {
 			options[ key ] = value;
 		}
 
+		this._setOptions( options );
+
+		return this;
+	},
+	_setOptions: function( options ) {
+		var self = this;
 		$.each( options, function( key, value ) {
 			self._setOption( key, value );
 		});
 
-		return self;
+		return this;
 	},
 	_setOption: function( key, value ) {
 		this.options[ key ] = value;
 
 		if ( key === "disabled" ) {
 			this.widget()
-				[ value ? "addClass" : "removeClass"](
-					this.widgetBaseClass + "-disabled" + " " +
-					"ui-state-disabled" )
+				.toggleClass( this.widgetBaseClass + "-disabled ui-state-disabled", !!value )
 				.attr( "aria-disabled", value );
 		}
 

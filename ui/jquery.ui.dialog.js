@@ -1,7 +1,7 @@
 /*
  * jQuery UI Dialog @VERSION
  *
- * Copyright 2010, AUTHORS.txt (http://jqueryui.com/about)
+ * Copyright 2011, AUTHORS.txt (http://jqueryui.com/about)
  * Dual licensed under the MIT or GPL Version 2 licenses.
  * http://jquery.org/license
  *
@@ -125,20 +125,6 @@ $.widget("ui.dialog", {
 			uiDialogTitlebarClose = $( "<a href='#'></a>" )
 				.addClass( "ui-dialog-titlebar-close  ui-corner-all" )
 				.attr( "role", "button" )
-				.hover(
-					function() {
-						uiDialogTitlebarClose.addClass( "ui-state-hover" );
-					},
-					function() {
-						uiDialogTitlebarClose.removeClass( "ui-state-hover" );
-					}
-				)
-				.focus(function() {
-					uiDialogTitlebarClose.addClass( "ui-state-focus" );
-				})
-				.blur(function() {
-					uiDialogTitlebarClose.removeClass( "ui-state-focus" );
-				})
 				.click(function( event ) {
 					event.preventDefault();
 					self.close( event );
@@ -157,6 +143,8 @@ $.widget("ui.dialog", {
 				.prependTo( uiDialogTitlebar );
 
 		uiDialogTitlebar.find( "*" ).add( uiDialogTitlebar ).disableSelection();
+		this._hoverable( uiDialogTitlebarClose );
+		this._focusable( uiDialogTitlebarClose );
 
 		if ( options.draggable && $.fn.draggable ) {
 			self._makeDraggable();
@@ -365,7 +353,10 @@ $.widget("ui.dialog", {
 					button.button();
 				}
 			});
+			self.uiDialog.addClass( "ui-dialog-buttons" );
 			uiDialogButtonPane.appendTo( self.uiDialog );
+		} else {
+			self.uiDialog.removeClass( "ui-dialog-buttons" );
 		}
 	},
 
@@ -600,7 +591,7 @@ $.widget("ui.dialog", {
 				break;
 		}
 
-		$.Widget.prototype._setOption.apply( self, arguments );
+		this._super( "_setOption", key, value );
 	},
 
 	_size: function() {

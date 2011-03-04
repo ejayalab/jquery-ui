@@ -1,8 +1,5 @@
-/*
- * panel_tickets.js
- */
 (function($) {
 
-module("panel: tickets");
+	module("panel: tickets");
 
 })(jQuery);

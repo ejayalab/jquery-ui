@@ -1,18 +1,15 @@
-/*
- * panel_defaults.js
- */
-
 var panel_defaults = {
 	disabled: false,
 	event: "click",
 	collapsible: true,
-    collapsed: false,
-    collapseType: 'up',
-    collapseSpeed: 'fast',
+    expanded: true,
+    expandType: 'down',
+    expandSpeed: 'fast',
     draggable: false,
+    resizable: false,
     stackable: true,
     controls: false,
-    accordionGroupClass: false,
+    accordionGroupName: false,
     cookie: null,
 	icons: {
 		header : 'ui-icon-triangle-1-e',
